@@ -43,7 +43,7 @@ namespace gitlab_ci_runner.runner
         /// <summary>
         /// Projects Directory
         /// </summary>
-        private string sProjectsDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) + @"\projects";
+        private string sProjectsDir = Program.HomePath + @"\projects";
 
         /// <summary>
         /// Project Directory
@@ -190,7 +190,7 @@ namespace gitlab_ci_runner.runner
                 p.StartInfo.Arguments = "/C \"" + sCommand + "\""; // pass full command as arguments
 
                 // Environment variables
-                p.StartInfo.EnvironmentVariables["HOME"] = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile); // Fix for missing SSH Key
+                p.StartInfo.EnvironmentVariables["HOME"] = Program.HomePath; // Fix for missing SSH Key
 
                 p.StartInfo.EnvironmentVariables["BUNDLE_GEMFILE"] = sProjectDir + @"\Gemfile";
                 p.StartInfo.EnvironmentVariables["BUNDLE_BIN_PATH"] = "";

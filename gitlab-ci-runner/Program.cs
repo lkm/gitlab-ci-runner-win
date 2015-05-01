@@ -13,16 +13,37 @@ namespace gitlab_ci_runner
 {
     class Program
     {
+        public static string HomePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
         static void Main(string[] args)
         {
             Console.InputEncoding = Encoding.Default;
             Console.OutputEncoding = Encoding.Default;
             ServicePointManager.DefaultConnectionLimit = 999;
 
+
 			if (args.Contains ("-sslbypass"))
 			{
 				Program.RegisterSecureSocketsLayerBypass ();
 			}
+
+            if (args.Contains("-C"))
+            {
+                int pathIndex = Array.IndexOf(args, "-C");
+                if (pathIndex > args.Length - 1)
+                {
+                    Console.WriteLine("Must specific path with -C");
+                    System.Environment.Exit(-1);
+                }
+
+                Program.HomePath = args[pathIndex + 1];
+                if (Directory.Exists(Program.HomePath) == false)
+                {
+                    Console.WriteLine("Folder does not exist");
+                    System.Environment.Exit(-1);
+                }
+            }
+
 
             if (Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location).Substring(0, 1) == @"\") {
                 Console.WriteLine("Can't run on UNC Path");

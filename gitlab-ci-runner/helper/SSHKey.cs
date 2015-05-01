@@ -18,24 +18,24 @@ namespace gitlab_ci_runner.helper
             // We need both, the Public and Private Key
             // Public Key to send to Gitlab
             // Private Key to connect to Gitlab later
-            if (File.Exists(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + @"\.ssh\id_rsa.pub") &&
-                File.Exists(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + @"\.ssh\id_rsa"))
+            if (File.Exists(Program.HomePath + @"\.ssh\id_rsa.pub") &&
+                File.Exists(Program.HomePath + @"\.ssh\id_rsa"))
             {
                 return;
             }
 
             try {
-                Directory.CreateDirectory(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + @"\.ssh");
+                Directory.CreateDirectory(Program.HomePath + @"\.ssh");
             } catch (Exception) {}
             Process p = new Process();
             p.StartInfo.FileName = "ssh-keygen";
-            p.StartInfo.Arguments = "-t rsa -f \"" + Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\.ssh\\id_rsa\" -N \"\"";
+            p.StartInfo.Arguments = "-t rsa -f \"" + Program.HomePath + "\\.ssh\\id_rsa\" -N \"\"";
             p.Start();
             Console.WriteLine();
             Console.WriteLine("Waiting for SSH Key to be generated ...");
             p.WaitForExit();
-            while (!File.Exists(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + @"\.ssh\id_rsa.pub") &&
-                   !File.Exists(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + @"\.ssh\id_rsa"))
+            while (!File.Exists(Program.HomePath + @"\.ssh\id_rsa.pub") &&
+                   !File.Exists(Program.HomePath + @"\.ssh\id_rsa"))
             {
                 Thread.Sleep(1000);
             }
@@ -48,9 +48,9 @@ namespace gitlab_ci_runner.helper
         /// <returns></returns>
         public static string getPublicKey()
         {
-            if (File.Exists(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + @"\.ssh\id_rsa.pub"))
+            if (File.Exists(Program.HomePath + @"\.ssh\id_rsa.pub"))
             {
-                return TextFile.ReadFile(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + @"\.ssh\id_rsa.pub");
+                return TextFile.ReadFile(Program.HomePath + @"\.ssh\id_rsa.pub");
             }
             else
             {
