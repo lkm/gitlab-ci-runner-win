@@ -143,5 +143,10 @@ namespace gitlab_ci_runner.api
 		{
 			return System.Text.RegularExpressions.Regex.Replace (this.commands, "(\r|\n)+", "\n").Split ('\n');
 		}
+
+        public bool runAsPowershell()
+        {
+            return commands.Trim().Substring(0, 4) == "#ps1";
+        }
 	}
 }

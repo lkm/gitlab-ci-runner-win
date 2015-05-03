@@ -8,6 +8,9 @@ using System.Reflection;
 using System.Text;
 using gitlab_ci_runner.api;
 using Microsoft.Experimental.IO;
+using System.Management.Automation;
+using System.Threading;
+using System.Collections.ObjectModel;
 
 namespace gitlab_ci_runner.runner
 {
@@ -95,41 +98,60 @@ namespace gitlab_ci_runner.runner
         public void run()
         {
             state = State.RUNNING;
-            
-            try {
+
+            try
+            {
 
                 // Initialize project dir
                 initProjectDir();
-    
+
                 // Add build commands
-                foreach (string sCommand in buildInfo.GetCommands ())
+
+                if (buildInfo.runAsPowershell())
                 {
-                    commands.AddLast(sCommand);
-                }
-    
-                // Execute
-                foreach (string sCommand in commands)
-                {
-                    if (!exec(sCommand))
+                    var powerScript = string.Join(System.Environment.NewLine, commands.ToArray());
+                    powerScript = powerScript.Replace("&&", System.Environment.NewLine);
+                    powerScript += System.Environment.NewLine + System.Environment.NewLine + buildInfo.commands;
+
+                    var script = preparePowerShellScript(powerScript);
+                    if (!execPowerShell(script))
                     {
                         state = State.FAILED;
-                        break;
                     }
                 }
-    
+                else
+                {
+                    foreach (string sCommand in buildInfo.GetCommands())
+                    {
+                        commands.AddLast(sCommand);
+                    }
+
+                    // Execute
+                    foreach (string sCommand in commands)
+                    {
+                        if (!exec(sCommand))
+                        {
+                            state = State.FAILED;
+                            break;
+                        }
+                    }
+                }
+
                 if (state == State.RUNNING)
                 {
                     state = State.SUCCESS;
                 }
-                
-            } catch (Exception rex) {
+
+            }
+            catch (Exception rex)
+            {
                 outputList.Enqueue("");
                 outputList.Enqueue("A runner exception occoured: " + rex.Message);
                 outputList.Enqueue("");
                 state = State.FAILED;
             }
-            
-            
+
+
             completed = true;
         }
 
@@ -164,7 +186,7 @@ namespace gitlab_ci_runner.runner
         }
 
         /// <summary>
-        /// Execute a command
+        /// Execute a single command
         /// </summary>
         /// <param name="sCommand">Command to execute</param>
         private bool exec(string sCommand)
@@ -236,6 +258,92 @@ namespace gitlab_ci_runner.runner
             }
         }
 
+        /// <summary>
+        /// Execute a script
+        /// </summary>
+        /// <param name="script">Script to execute</param>
+        private bool execPowerShell(string script)
+        {
+            try
+            {
+                using (PowerShell p = PowerShell.Create())
+                {
+                    p.AddScript(script);
+
+                    PSDataCollection<PSObject> outputCollection = new PSDataCollection<PSObject>();
+                    outputCollection.DataAdded += outputCollection_DataAdded;
+
+                    p.Streams.Error.DataAdded += outputCollection_DataAdded;
+                    p.Streams.Warning.DataAdded += outputCollection_DataAdded;
+                    
+                    PSInvocationSettings settings = new PSInvocationSettings();
+                    settings.ErrorActionPreference = ActionPreference.Stop;
+                    settings.ExposeFlowControlExceptions = true;
+                    IAsyncResult result = p.BeginInvoke<PSObject, PSObject>(null, outputCollection, settings, null, null);
+
+
+                    while (result.IsCompleted == false)
+                    {
+                        Thread.Sleep(1000);
+                    }
+                    var errors = p.Streams.Error.ReadAll();
+                    return p.HadErrors == false;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private string preparePowerShellScript(string script)
+        {
+            string file = System.IO.Path.GetTempPath() + Guid.NewGuid().ToString() + ".ps1";
+
+            using (StreamWriter fileWriter = new StreamWriter(file))
+            {
+                string output;
+
+                // Halt on all errors
+                output = "$ErrorActionPreference = \"Stop\";";
+
+                // Environment variables
+                output += "$env:HOME=\"" + Program.HomePath + "\";"; // Fix for missing SSH Key
+
+                output += "$env:BUNDLE_GEMFILE=\"" + sProjectDir + "\\Gemfile\";";
+                output += "$env:BUNDLE_BIN_PATH=\"\\\";";
+                output += "$env:RUBYOPT=\"\\\";";
+
+                output += "$env:CI_SERVER=\"yes\";";
+                output += "$env:CI_SERVER_NAME=\"GitLab CI\";";
+                output += "$env:CI_SERVER_VERSION=\"null\";"; // GitlabCI Version
+                output += "$env:CI_SERVER_REVISION=\"null\";"; // GitlabCI Revision
+
+                output += "$env:CI_BUILD_REF=\"" + buildInfo.sha + "\";";
+                output += "$env:CI_BUILD_REF_NAME=\"" + buildInfo.ref_name + "\";";
+                output += "$env:CI_BUILD_ID=\"" + buildInfo.id.ToString() + "\";";
+
+                output = output.Replace(";", ";" + System.Environment.NewLine);
+
+                output += System.Environment.NewLine + System.Environment.NewLine + script;
+
+                fileWriter.Write(output);
+            }
+
+            return file;
+        }
+
+        void outputCollection_DataAdded(object sender, DataAddedEventArgs e)
+        {
+            PSDataCollection<PSObject> myp = (PSDataCollection<PSObject>)sender;
+
+            Collection<PSObject> results = myp.ReadAll();
+            foreach (PSObject result in results)
+            {
+                outputList.Enqueue(result.ToString());
+            }
+
+        }
         /// <summary>
         /// STDOUT/STDERR Handler
         /// </summary>
